@@ -1,0 +1,20 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# local database
+/data/
+
+# env (개인 키만 제외 — .env.development/.env.production 은 git 포함)
+.env.local
+.env*.local
+
+# misc
+*.tsbuildinfo
+.mermaid-cache/
+.DS_Store
+npm-debug.log*
