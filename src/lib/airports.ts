@@ -6,6 +6,14 @@ export const AIRPORTS = [
   { code: "CJU", name: "제주" },
   { code: "TAE", name: "대구" },
   { code: "CJJ", name: "청주" },
+  { code: "KWJ", name: "광주" },
+  { code: "USN", name: "울산" },
+  { code: "RSU", name: "여수" },
+  { code: "HIN", name: "사천(진주)" },
+  { code: "WJU", name: "원주" },
+  { code: "YNY", name: "양양" },
+  { code: "MWX", name: "무안" },
+  { code: "KUV", name: "군산" },
   { code: "NRT", name: "도쿄 나리타" },
   { code: "HND", name: "도쿄 하네다" },
   { code: "KIX", name: "오사카 간사이" },
@@ -36,3 +44,12 @@ export const AIRPORTS = [
   { code: "HNL", name: "호놀룰루" },
   { code: "SYD", name: "시드니" },
 ] as const;
+
+/** 한국 국내 공항 — 출발·도착이 모두 여기 속하면 국내선 (네이버 국내선 API 대상) */
+export const KR_DOMESTIC_AIRPORTS = new Set([
+  "ICN", "GMP", "PUS", "CJU", "TAE", "CJJ", "KWJ", "USN", "RSU", "HIN", "WJU", "YNY", "MWX", "KUV",
+]);
+
+export function isDomesticRoute(origin: string, destination: string): boolean {
+  return KR_DOMESTIC_AIRPORTS.has(origin) && KR_DOMESTIC_AIRPORTS.has(destination);
+}

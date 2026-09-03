@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb, type WatchRow } from "@/lib/db";
+import { scanWatchNow } from "@/lib/scanner";
 import { watchPatchSchema } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
     time_to: p.timeTo ?? existing.time_to,
     max_price: p.maxPrice ?? existing.max_price,
     active: p.active !== undefined ? (p.active ? 1 : 0) : existing.active,
+    return_time_from: p.returnTimeFrom !== undefined ? p.returnTimeFrom : existing.return_time_from,
+    return_time_to: p.returnTimeTo !== undefined ? p.returnTimeTo : existing.return_time_to,
+    direct_only: p.directOnly !== undefined ? (p.directOnly ? 1 : 0) : existing.direct_only,
   };
+  if (!merged.return_date) {
+    merged.return_time_from = null;
+    merged.return_time_to = null;
+  }
 
   if (merged.origin === merged.destination) {
     return NextResponse.json({ error: "출발지와 도착지가 같습니다" }, { status: 400 });
@@ -42,7 +50,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "오는 날이 가는 날보다 빠릅니다" }, { status: 400 });
   }
   if (merged.time_from > merged.time_to) {
-    return NextResponse.json({ error: "시간대 범위가 올바르지 않습니다" }, { status: 400 });
+    return NextResponse.json({ error: "가는편 시간대 범위가 올바르지 않습니다" }, { status: 400 });
+  }
+  if (merged.return_time_from && merged.return_time_to && merged.return_time_from > merged.return_time_to) {
+    return NextResponse.json({ error: "오는편 시간대 범위가 올바르지 않습니다" }, { status: 400 });
   }
 
   // 노선·날짜가 바뀌면 기존 수집 데이터·알림은 의미가 없으므로 함께 정리한다
@@ -55,7 +66,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const db = getDb();
   db.transaction(() => {
     db.prepare(
-      `UPDATE watches SET origin=?, destination=?, depart_date=?, return_date=?, time_from=?, time_to=?, max_price=?, active=?
+      `UPDATE watches SET origin=?, destination=?, depart_date=?, return_date=?, time_from=?, time_to=?, max_price=?, active=?, return_time_from=?, return_time_to=?, direct_only=?
        WHERE id=?`,
     ).run(
       merged.origin,
@@ -66,6 +77,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
       merged.time_to,
       merged.max_price,
       merged.active,
+      merged.return_time_from,
+      merged.return_time_to,
+      merged.direct_only,
       id,
     );
     if (routeChanged) {
@@ -73,6 +87,19 @@ export async function PATCH(req: Request, ctx: Ctx) {
       db.prepare("DELETE FROM alerts WHERE watch_id = ?").run(id);
     }
   })();
+
+  // 조건이 바뀌었고 감시 중이면 즉시 재검색 (최근 검색 캐시가 있으면 재사용)
+  const conditionChanged =
+    routeChanged ||
+    merged.time_from !== existing.time_from ||
+    merged.time_to !== existing.time_to ||
+    merged.return_time_from !== existing.return_time_from ||
+    merged.return_time_to !== existing.return_time_to ||
+    merged.direct_only !== existing.direct_only ||
+    merged.max_price !== existing.max_price;
+  if (conditionChanged && merged.active === 1) {
+    scanWatchNow(id, "edited").catch((e) => console.warn("[scanner] edited scan failed:", e));
+  }
 
   return NextResponse.json({ watch: findWatch(id) });
 }
